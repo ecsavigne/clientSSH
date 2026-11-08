@@ -112,7 +112,7 @@ func NewClientSSH(opts ...Option) (*clientSSH, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error obtain public key: (%v)", err)
 	}
-	fmt.Println("Finder fingerprint:\n", ssh.FingerprintSHA256(publicKey))
+	// fmt.Println("Finder fingerprint:\n", ssh.FingerprintSHA256(publicKey))
 
 	secretKey, err := os.ReadFile(c.xxx_PathSecretKey)
 	if err != nil {
@@ -146,4 +146,9 @@ func (self *clientSSH) Close() {
 
 func (self *clientSSH) NewSession() (*ssh.Session, error) {
 	return self.c.NewSession()
+}
+
+type ClientSHH interface {
+	Close()
+	NewSession() (*ssh.Session, error)
 }

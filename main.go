@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ecsavigne/clientSSH/client"
 
@@ -22,7 +23,7 @@ func init() {
 
 func main() {
 	cl, e := client.NewClientSSH(
-		client.WithHost(viper.GetString("XXX_HOST_U2")),
+		client.WithHost(viper.GetString("XXX_HOST_U1")),
 		client.WithPort("22"),
 		client.WithUser(viper.GetString("XXX_USER")),
 		client.WithServerPublicKey(viper.GetString("XXX_PUBLIC_KEY_SERVER")),
@@ -40,10 +41,17 @@ func main() {
 	}
 	defer session.Close()
 
-	output, err := session.CombinedOutput("df -h")
+	// session.Stdin = strings.NewReader(viper.GetString("XXX_PASS") + "\n")
+	// output, err := session.CombinedOutput("sudo -S -p '' sh /var/www/html/my_whatsmeow/utils/updatetest.sh")
+	output, err := session.CombinedOutput("df -h / | awk 'NR==2 {$NF=\"\"; print}'")
 	if err != nil {
 		fmt.Printf("ejecutar comando: (%+v); salida: %s", err, output)
 	}
+	data := strings.Split(string(output), " ")
+	size := data[1]
+	used := data[2]
+	avaliable := data[3]
+	use := data[4]
 
-	fmt.Printf("%s", output)
+	fmt.Printf("Size: %v; Used: %v; Avaliable: %v; Use: %v", size, used, avaliable, use)
 }
