@@ -97,18 +97,32 @@ func setAlgoritms(c config, cc *ssh.ClientConfig) {
 	}
 }
 
-// “ecdsa”, “ed25519”, “ecdsa-sk”, “ed25519-sk”, or “rsa”
+// “ecdsa”, “ed25519”, “ecdsa-sk”, ed25519-sk, or “rsa”
 func getPublicKeyServer(algorithm string, ip, port string) (string, error) {
 	command := []string{
 		"ssh-keyscan",
 		"-t", strings.ToLower(algorithm),
 		"-p", port, ip,
 	}
-	resp, err := exec.Command(command[0], command[1:]...).Output()
+	resp, err := exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
+		if strings.Contains(string(resp), "OpenSSH") {
+			return "", fmt.Errorf("the server does not present the public key for the algorithm: (%v)", algorithm)
+		}
 		return "", fmt.Errorf("error obtain public key: (%v)", err)
 	}
-	keyPrefix := fmt.Sprintf("ssh-%s", strings.ToLower(algorithm))
+
+	keyPrefix := ""
+	switch algorithm {
+	case "ed25519", "rsa":
+		keyPrefix = fmt.Sprintf("ssh-%s", strings.ToLower(algorithm))
+	case "ecdsa":
+		keyPrefix = fmt.Sprintf("%s-sha2-nistp256", strings.ToLower(algorithm))
+	case "ecdsa-sk": // SSH-2.0-OpenSSH_8.2p1
+		keyPrefix = "SSH-2.0-OpenSSH_8.2p1"
+		// ed25519-sk
+	}
+
 	_, after, _ := strings.Cut(string(resp), keyPrefix)
 	key := fmt.Sprintf("%s%s", keyPrefix, after)
 

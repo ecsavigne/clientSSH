@@ -27,6 +27,7 @@ func main() {
 		client.WithPort("22"),
 		client.WithUser(viper.GetString("XXX_USER")),
 		client.WithPassword(viper.GetString("XXX_PASS")),
+		client.WithAlgorithms("ed25519"),
 		// client.WithServerPublicKey(viper.GetString("XXX_PUBLIC_KEY_SERVER")),
 		// client.WithPathSecretKey(viper.GetString("XXX_PATH_SECRET_KEY")),
 	)
