@@ -23,7 +23,7 @@ func init() {
 
 func main() {
 	cl, e := client.NewClientSSH(
-		client.WithHost(viper.GetString("XXX_HOST_U1")),
+		client.WithHost(viper.GetString("XXX_HOST_U2")),
 		client.WithPort("22"),
 		client.WithUser(viper.GetString("XXX_USER")),
 		client.WithPassword(viper.GetString("XXX_PASS")),

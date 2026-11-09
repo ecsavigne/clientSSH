@@ -170,7 +170,18 @@ func NewClientSSH(opts ...Option) (*clientSSH, error) {
 	}
 
 	if c.xxx_Password != "" {
-		config.Auth = []ssh.AuthMethod{ssh.Password(c.xxx_Password)}
+		config.Auth = []ssh.AuthMethod{
+			ssh.Password(c.xxx_Password),
+			ssh.KeyboardInteractive(
+				func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+					answers := make([]string, len(questions))
+					for i := range questions {
+						answers[i] = c.xxx_Password
+					}
+					return answers, nil
+				},
+			),
+		}
 	} else {
 		if c.xxx_PathSecretKey == "" {
 			return nil, fmt.Errorf("server por secret key or password is required")
