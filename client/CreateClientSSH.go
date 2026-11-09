@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -13,6 +15,7 @@ type config struct {
 	xxx_Host            string
 	xxx_Port            string
 	xxx_User            string
+	xxx_Password        string
 	xxx_Algorithms      string
 }
 
@@ -48,7 +51,13 @@ func WithUser(user string) Option {
 	}
 }
 
-// ED25519, ECDSA256, ECDSA384, ECDSA521, etc. Default is KeyAlgoED25519
+func WithPassword(password string) Option {
+	return func(c *config) {
+		c.xxx_Password = password
+	}
+}
+
+// ecdsa, ed25519, ecdsa-sk, ed25519-sk, or rsa
 func WithAlgorithms(algorithm string) Option {
 	return func(c *config) {
 		c.xxx_Algorithms = algorithm
@@ -66,23 +75,44 @@ func defaultOptions() *config {
 		xxx_Host:            "",
 		xxx_Port:            "22",
 		xxx_User:            "",
-		xxx_Algorithms:      "ED25519",
+		xxx_Password:        "",
+		xxx_Algorithms:      "ed25519",
 	}
 }
 
 func setAlgoritms(c config, cc *ssh.ClientConfig) {
-	switch c.xxx_Algorithms {
-	case "ED25519":
+	switch strings.ToLower(c.xxx_Algorithms) {
+	case "ed25519":
 		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoED25519}
-	case "ECDSA256":
-		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoECDSA256}
-	case "ECDSA384":
-		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoECDSA384}
-	case "ECDSA521":
-		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoECDSA521}
+	case "ecdsa":
+		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA256}
+	case "ecdsa-sk":
+		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoSKECDSA256}
+	case "ed25519-sk":
+		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoSKED25519}
+	case "rsa":
+		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSASHA512}
 	default:
 		cc.HostKeyAlgorithms = []string{ssh.KeyAlgoED25519}
 	}
+}
+
+// “ecdsa”, “ed25519”, “ecdsa-sk”, “ed25519-sk”, or “rsa”
+func getPublicKeyServer(algorithm string, ip, port string) (string, error) {
+	command := []string{
+		"ssh-keyscan",
+		"-t", strings.ToLower(algorithm),
+		"-p", port, ip,
+	}
+	resp, err := exec.Command(command[0], command[1:]...).Output()
+	if err != nil {
+		return "", fmt.Errorf("error obtain public key: (%v)", err)
+	}
+	keyPrefix := fmt.Sprintf("ssh-%s", strings.ToLower(algorithm))
+	_, after, _ := strings.Cut(string(resp), keyPrefix)
+	key := fmt.Sprintf("%s%s", keyPrefix, after)
+
+	return key, nil
 }
 
 func NewClientSSH(opts ...Option) (*clientSSH, error) {
@@ -90,14 +120,6 @@ func NewClientSSH(opts ...Option) (*clientSSH, error) {
 
 	for _, o := range opts {
 		o(c)
-	}
-
-	if c.xxx_PathSecretKey == "" {
-		return nil, fmt.Errorf("path  secret key is required")
-	}
-
-	if c.xxx_ServerPublicKey == "" {
-		return nil, fmt.Errorf("path public key is required")
 	}
 
 	if c.xxx_Host == "" {
@@ -108,28 +130,55 @@ func NewClientSSH(opts ...Option) (*clientSSH, error) {
 		return nil, fmt.Errorf("user is required")
 	}
 
-	publicKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(c.xxx_ServerPublicKey))
+	if c.xxx_ServerPublicKey == "" {
+		key, e := getPublicKeyServer(c.xxx_Algorithms, c.xxx_Host, c.xxx_Port)
+		if key == "" {
+			return nil, fmt.Errorf("server public key cannot be obtained, error: (%v)", e)
+		}
+
+		c.xxx_ServerPublicKey = key
+	}
+
+	var (
+		publicKey ssh.PublicKey
+		signer    ssh.Signer
+		err       error
+	)
+
+	publicKey, _, _, _, err = ssh.ParseAuthorizedKey([]byte(c.xxx_ServerPublicKey))
 	if err != nil {
 		return nil, fmt.Errorf("error obtain public key: (%v)", err)
-	}
-	// fmt.Println("Finder fingerprint:\n", ssh.FingerprintSHA256(publicKey))
-
-	secretKey, err := os.ReadFile(c.xxx_PathSecretKey)
-	if err != nil {
-		return nil, fmt.Errorf("error obtain secret key: (%v)", err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(secretKey)
-	if err != nil {
-		return nil, fmt.Errorf("error obtain signer: (%v)", err)
 	}
 
 	config := &ssh.ClientConfig{
 		User:            c.xxx_User,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: ssh.FixedHostKey(publicKey),
 	}
-	setAlgoritms(*c, config)
+
+	if c.xxx_Password != "" {
+		config.Auth = []ssh.AuthMethod{ssh.Password(c.xxx_Password)}
+	} else {
+		if c.xxx_PathSecretKey == "" {
+			return nil, fmt.Errorf("server por secret key or password is required")
+		}
+		// fmt.Println("Finder fingerprint:\n", ssh.FingerprintSHA256(publicKey))
+
+		secretKey, err := os.ReadFile(c.xxx_PathSecretKey)
+		if err != nil {
+			return nil, fmt.Errorf("error obtain secret key: (%v)", err)
+		}
+
+		signer, err = ssh.ParsePrivateKey(secretKey)
+		if err != nil {
+			return nil, fmt.Errorf("error obtain signer: (%v)", err)
+		}
+
+		config.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
+	}
+
+	if c.xxx_Algorithms != "" {
+		setAlgoritms(*c, config)
+	}
 
 	address := fmt.Sprintf("%s:%s", c.xxx_Host, c.xxx_Port)
 	client, err := ssh.Dial("tcp", address, config)

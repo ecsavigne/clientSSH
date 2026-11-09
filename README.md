@@ -9,7 +9,7 @@ echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN7ZlAWVJn7jP/6e3mTWM308ypwHE3a8YJ6InA
 ```
     3. Obter key public server ED25519
 ```shell
-ssh-keyscan -t ed25519 -p 22 177.70.15.166
+ssh-keyscan -t ed25519 -p 22 111.11.11.111
 ```
     4. Set value in .env
 ```env

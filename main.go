@@ -26,8 +26,9 @@ func main() {
 		client.WithHost(viper.GetString("XXX_HOST_U1")),
 		client.WithPort("22"),
 		client.WithUser(viper.GetString("XXX_USER")),
-		client.WithServerPublicKey(viper.GetString("XXX_PUBLIC_KEY_SERVER")),
-		client.WithPathSecretKey(viper.GetString("XXX_PATH_SECRET_KEY")),
+		client.WithPassword(viper.GetString("XXX_PASS")),
+		// client.WithServerPublicKey(viper.GetString("XXX_PUBLIC_KEY_SERVER")),
+		// client.WithPathSecretKey(viper.GetString("XXX_PATH_SECRET_KEY")),
 	)
 	if e != nil {
 		fmt.Println(e)
