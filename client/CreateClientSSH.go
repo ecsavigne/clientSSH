@@ -1,10 +1,12 @@
 package client
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -17,6 +19,7 @@ type config struct {
 	xxx_User            string
 	xxx_Password        string
 	xxx_Algorithms      string
+	xxx_Name_client     string
 }
 
 type Option func(*config)
@@ -64,8 +67,22 @@ func WithAlgorithms(algorithm string) Option {
 	}
 }
 
+func WithNameClient(name string) Option {
+	return func(c *config) {
+		c.xxx_Name_client = name
+	}
+}
+
 type clientSSH struct {
 	c *ssh.Client
+}
+
+func nameHash() string {
+	str := fmt.Sprintf("name_%s", time.Now().String())
+	hasher := sha256.New()
+	hasher.Write([]byte(str))
+	hashBytes := hasher.Sum(nil)
+	return strings.ToUpper(fmt.Sprintf("%s", hashBytes[0:7]))
 }
 
 func defaultOptions() *config {
@@ -77,6 +94,7 @@ func defaultOptions() *config {
 		xxx_User:            "",
 		xxx_Password:        "",
 		xxx_Algorithms:      "ed25519",
+		xxx_Name_client:     nameHash(),
 	}
 }
 
@@ -129,6 +147,8 @@ func getPublicKeyServer(algorithm string, ip, port string) (string, error) {
 	return key, nil
 }
 
+const versionPackage = "v1.1.3"
+
 func NewClientSSH(opts ...Option) (*clientSSH, error) {
 	c := defaultOptions()
 
@@ -167,6 +187,7 @@ func NewClientSSH(opts ...Option) (*clientSSH, error) {
 	config := &ssh.ClientConfig{
 		User:            c.xxx_User,
 		HostKeyCallback: ssh.FixedHostKey(publicKey),
+		ClientVersion:   fmt.Sprintf("SSH-2.0-%s-%s", c.xxx_Name_client, versionPackage),
 	}
 
 	if c.xxx_Password != "" {
